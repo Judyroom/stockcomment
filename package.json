@@ -3,15 +3,31 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "worker": "node scripts/copy-pdf-worker.mjs",
+    "predev": "npm run worker",
     "dev": "next dev",
+    "dev:proxy": "npm run worker && node scripts/dev-proxy.mjs",
+    "prebuild": "npm run worker",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "eval": "tsx --env-file-if-exists=.env.local eval/run.ts",
+    "demos": "tsx --env-file-if-exists=.env.local scripts/build-demos.ts"
   },
   "dependencies": {
+    "@ai-sdk/deepseek": "^3.0.54",
+    "@ai-sdk/google": "^4.0.82",
+    "ai": "^7.0.118",
+    "lucide-react": "^1.48.0",
     "next": "16.3.6",
+    "pdfjs-dist": "^6.3.289",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "yahoo-finance2": "^4.0.2",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -21,6 +37,10 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
