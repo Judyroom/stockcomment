@@ -41,6 +41,7 @@ export async function loadDemo(id: string, lang: Lang): Promise<LoadedDemo> {
           provider: file.provider,
           ...newsDateRange(file.inputText),
           source: file.pdf ? { title: file.pdf.docTitle, publisher: file.pdf.publisher, url: file.pdf.sourceUrl } : undefined,
+          qa: file.qa,
         },
       },
     };

@@ -6,10 +6,12 @@
 //   npm run demos -- --only meta-q2-2026 --lang zh
 //   npm run demos -- --dry        # print the collected inputs only, no model calls
 //   npm run demos -- --manifest   # rebuild public/demos/manifest.json from existing files
+//   npm run demos -- --qa-only    # (re)generate the pre-answered questions of PDF demos only
 //
 // PDF demos are downloaded to scripts/.cache/ (git-ignored) and are not redistributed.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { generateText } from "ai";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import {
   DEMO_LANGS,
@@ -26,12 +28,14 @@ import {
 } from "@/config/demos";
 import { DocIndex, selectForAnalysis } from "@/lib/client/retriever";
 import { newRun, reduce, type RunState } from "@/lib/client/run-state";
-import { capabilities } from "@/lib/llm/providers";
+import { capabilities, getModel } from "@/lib/llm/providers";
 import { parsePdfData } from "@/lib/pdf-core";
+import { askPrompt, askSystem } from "@/lib/prompts/document";
+import { formatEvidence } from "@/lib/prompts/shared";
 import { runAnalysis } from "@/lib/pipeline/analyze";
 import type { AnalyzeRequest } from "@/lib/schemas";
 import { googleNews, yahooSymbolNews, type FeedItem } from "@/lib/tools/rss";
-import type { Provider } from "@/lib/types";
+import type { Lang, PdfChunk, Provider } from "@/lib/types";
 
 const TEXT_HEADLINES = 4;
 const SEARCH_HEADLINES = 3;
@@ -62,6 +66,22 @@ async function main() {
   const only = arg("only")?.split(",");
   mkdirSync("public/demos", { recursive: true });
 
+  if (process.argv.includes("--qa-only")) {
+    for (const demo of DEMOS.filter((d): d is PdfDemo => d.kind === "pdf" && (!only || only.includes(d.id)))) {
+      const prepared = await preparePdf(demo);
+      for (const lang of DEMO_LANGS.filter((l) => !arg("lang") || l === arg("lang"))) {
+        const path = `public/demos/${demo.id}.${lang}.json`;
+        if (!existsSync(path)) continue;
+        const file = JSON.parse(readFileSync(path, "utf8")) as DemoFile;
+        process.stdout.write(`${demo.id} ${lang} Q&A … `);
+        file.qa = await answerQuestions(demo, prepared, lang, provider);
+        writeFileSync(path, JSON.stringify(file));
+        console.log(`ok (${file.qa.length})`);
+      }
+    }
+    return;
+  }
+
   for (const demo of DEMOS.filter((d) => !only || only.includes(d.id))) {
     const prepared = await prepare(demo);
     console.log(`\n${demo.id} (${demo.kind}): input ${prepared.inputText.length} chars`);
@@ -88,6 +108,7 @@ async function main() {
         settings: demo.settings,
         headlines: prepared.headlines,
         pdf: prepared.pdf,
+        qa: demo.kind === "pdf" ? await answerQuestions(demo, prepared, lang, provider) : undefined,
         run: { ...run, id: `demo-${demo.id}-${lang}` },
       };
       writeFileSync(`public/demos/${demo.id}.${lang}.json`, JSON.stringify(file));
@@ -181,6 +202,25 @@ async function preparePdf(demo: PdfDemo): Promise<Prepared> {
       publisher: demo.publisher,
     },
   };
+}
+
+/** Answer the demo's questions exactly as /api/ask would, over the same chunks the analysis used. */
+async function answerQuestions(demo: PdfDemo, prepared: Prepared, lang: Lang, provider: Provider) {
+  if (prepared.input.kind !== "pdf") return [];
+  const chunks: PdfChunk[] = prepared.input.chunks;
+  const excerpts = formatEvidence(
+    chunks.map((c) => ({ id: c.id, kind: "pdf" as const, title: `${demo.fileName} · p.${c.page}`, page: c.page, text: c.text })),
+  );
+  const qa: { question: string; answer: string }[] = [];
+  for (const question of demo.questions[lang]) {
+    const { text } = await generateText({
+      ...getModel(provider, "main", { temperature: 0.3 }),
+      system: askSystem(demo.fileName, lang),
+      prompt: askPrompt(excerpts, question),
+    });
+    qa.push({ question, answer: text.trim() });
+  }
+  return qa;
 }
 
 async function generate(demo: DemoSpec, prepared: Prepared, lang: "en" | "zh", provider: Provider): Promise<RunState> {

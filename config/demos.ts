@@ -41,6 +41,8 @@ export interface PdfDemo extends DemoBase {
   publisher: string;
   /** Publication date of the document, YYYY-MM-DD. */
   docDate: string;
+  /** Questions answered ahead of time to demo "Ask the document". */
+  questions: Record<Lang, string[]>;
 }
 
 export type DemoSpec = TextDemo | SearchDemo | PdfDemo;
@@ -122,6 +124,14 @@ export const DEMOS: DemoSpec[] = [
     docTitle: "Meta Reports Second Quarter 2026 Results",
     publisher: "Meta Investor Relations",
     docDate: "2026-07-29",
+    questions: {
+      zh: ["本季度营收增长的主要驱动因素是什么？", "成本和费用为什么大幅上升？", "公司对第三季度和全年给出了什么指引？"],
+      en: [
+        "What drove revenue growth this quarter?",
+        "Why did costs and expenses rise so much?",
+        "What guidance did the company give for Q3 and the full year?",
+      ],
+    },
     primaryTicker: "META",
     settings: debate("growth_seeker", "value_investor"),
   },
@@ -163,6 +173,8 @@ export interface DemoFile {
   settings: AnalyzeRequest["settings"];
   /** Search demos: the headlines shown as selected. */
   headlines?: DemoHeadline[];
+  /** PDF demos: questions answered ahead of time, in this file's language. */
+  qa?: { question: string; answer: string }[];
   /** PDF demos: document metadata; the PDF is linked, not bundled. */
   pdf?: { fileName: string; sourceUrl: string; pageCount: number; retrieval: string; docTitle: string; docDate: string; publisher: string };
   // RunState, kept loose here to avoid a config → client import cycle.

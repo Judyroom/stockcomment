@@ -33,6 +33,7 @@ export function DocumentSection({
       {run.kpis && run.kpis.length > 0 && <KpiTable kpis={run.kpis} onCite={onCite} />}
       {doc && <AgentCard agent={doc} onCite={onCite} />}
       {index && fileName && <AskDocument index={index} fileName={fileName} provider={provider} onCite={onCite} />}
+      {!index && run.demo?.qa && run.demo.qa.length > 0 && <DemoQA qa={run.demo.qa} onCite={onCite} />}
     </div>
   );
 }
@@ -66,6 +67,34 @@ function KpiTable({ kpis, onCite }: { kpis: Kpi[]; onCite: (id: string) => void 
           ))}
         </tbody>
       </table>
+    </Card>
+  );
+}
+
+/** Pre-answered questions shown for PDF demos, where the document itself is not in the browser. */
+function DemoQA({ qa, onCite }: { qa: { question: string; answer: string }[]; onCite: (id: string) => void }) {
+  const { t } = useI18n();
+  return (
+    <Card className="p-5">
+      <div className="mb-1 text-sm font-semibold text-ink">{t("ask")}</div>
+      <p className="mb-4 text-xs text-ink-3">{t("askDemoNote")}</p>
+      <div className="space-y-3">
+        {qa.map((m, i) => (
+          <div key={i} className="space-y-3">
+            <div className="ml-auto w-fit max-w-[85%] rounded-lg bg-accent-soft px-3 py-2 text-sm text-ink">{m.question}</div>
+            <div className="max-w-[95%]">
+              <Markdown text={m.answer} onCite={onCite} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex gap-2 opacity-60">
+        <input
+          disabled
+          placeholder={t("askDemoLocked")}
+          className="min-w-0 flex-1 cursor-not-allowed rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-ink placeholder:text-ink-3"
+        />
+      </div>
     </Card>
   );
 }

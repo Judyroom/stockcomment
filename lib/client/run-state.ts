@@ -47,6 +47,8 @@ export interface RunState {
     newsTo: string | null;
     /** PDF demos: the public document the result was generated from. */
     source?: { title: string; publisher: string; url: string };
+    /** PDF demos: questions answered ahead of time. */
+    qa?: { question: string; answer: string }[];
   };
 }
 
