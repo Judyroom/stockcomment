@@ -113,10 +113,13 @@ export class DocIndex {
     for (const ranking of rankings) {
       ranking.slice(0, 50).forEach((idx, rank) => fused.set(idx, (fused.get(idx) ?? 0) + 1 / (60 + rank)));
     }
-    return [...fused.entries()]
+    const ranked = [...fused.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, k)
       .map(([idx]) => this.chunks[idx]);
+    // No lexical overlap and no vectors (e.g. a Chinese question on an English report without a
+    // Gemini key): fall back to the opening chunks so the model can say the answer was not found.
+    return ranked.length ? ranked : this.chunks.slice(0, k);
   }
 }
 
