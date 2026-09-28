@@ -1,8 +1,8 @@
 "use client";
 
-import { FileText, Loader2, Newspaper, Search, Type, Upload, X } from "lucide-react";
+import { ExternalLink, FileText, Loader2, Newspaper, Search, Type, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { DEMOS, type DemoManifest } from "@/config/demos";
+import { demosOfKind, type DemoFile, type DemoKind, type DemoManifest } from "@/config/demos";
 import { ApiError, searchNews } from "@/lib/client/api";
 import { formatRange, loadDemoManifest } from "@/lib/client/demos";
 import type { PdfPhase } from "@/lib/client/use-pdf";
@@ -24,10 +24,13 @@ interface Props {
   disabled: boolean;
   activeDemo: string | null;
   onDemo: (id: string) => void;
+  /** Metadata of the PDF demo currently shown, when the PDF tab has no uploaded file. */
+  pdfDemo: DemoFile["pdf"] | null;
 }
 
-export function InputPanel({ tab, setTab, text, setText, selected, setSelected, pdf, disabled, activeDemo, onDemo }: Props) {
-  const { t, lang } = useI18n();
+export function InputPanel(props: Props) {
+  const { tab, setTab, text, setText, disabled } = props;
+  const { t } = useI18n();
   const [manifest, setManifest] = useState<DemoManifest | null>(null);
   useEffect(() => {
     loadDemoManifest().then(setManifest);
@@ -37,6 +40,9 @@ export function InputPanel({ tab, setTab, text, setText, selected, setSelected, 
     { id: "search", label: t("tabSearch"), icon: Search },
     { id: "pdf", label: t("tabPdf"), icon: FileText },
   ];
+  const demoBlock = (kind: DemoKind) => (
+    <DemoChips kind={kind} manifest={manifest} activeDemo={props.activeDemo} onDemo={props.onDemo} disabled={disabled} />
+  );
 
   return (
     <div>
@@ -69,38 +75,71 @@ export function InputPanel({ tab, setTab, text, setText, selected, setSelected, 
             placeholder={t("textPlaceholder")}
             className="w-full resize-y rounded-lg border border-border bg-surface px-3 py-2.5 text-sm leading-relaxed text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
           />
-          <div className="mt-2 text-xs text-ink-3">{t("demos")}</div>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {DEMOS.map((d) => {
-              const m = manifest?.items[d.id];
-              const dates = m
-                ? t("demoDates", { news: formatRange(m.newsFrom, m.newsTo), date: localDate(m.generatedAt) })
-                : undefined;
-              return (
-                <Chip key={d.id} active={activeDemo === d.id} onClick={() => onDemo(d.id)} disabled={disabled}>
-                  <span title={dates}>{d.label[lang]}</span>
-                </Chip>
-              );
-            })}
-          </div>
-          {manifest && Object.keys(manifest.items).length > 0 && (
-            <p className="mt-1.5 text-[11px] text-ink-3 tabular">
-              {t("demoDates", {
-                news: formatRange(
-                  Object.values(manifest.items).map((m) => m.newsFrom).filter(Boolean).sort()[0],
-                  Object.values(manifest.items).map((m) => m.newsTo).filter(Boolean).sort().at(-1),
-                ),
-                date: localDate(Object.values(manifest.items).map((m) => m.generatedAt).sort().at(-1)!),
-              })}
-            </p>
-          )}
-          <p className="mt-1.5 text-[11px] text-ink-3">{t("demosHint")}</p>
+          {demoBlock("text")}
         </div>
       )}
 
-      {tab === "search" && <SearchTab selected={selected} setSelected={setSelected} disabled={disabled} />}
+      {tab === "search" && (
+        <div>
+          <SearchTab selected={props.selected} setSelected={props.setSelected} disabled={disabled} />
+          {demoBlock("search")}
+        </div>
+      )}
 
-      {tab === "pdf" && <PdfTab pdf={pdf} disabled={disabled} />}
+      {tab === "pdf" && (
+        <div>
+          <PdfTab pdf={props.pdf} pdfDemo={props.pdfDemo} disabled={disabled} />
+          {demoBlock("pdf")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Demo chips for one tab, with the date range of their material and when they were generated. */
+function DemoChips({
+  kind,
+  manifest,
+  activeDemo,
+  onDemo,
+  disabled,
+}: {
+  kind: DemoKind;
+  manifest: DemoManifest | null;
+  activeDemo: string | null;
+  onDemo: (id: string) => void;
+  disabled: boolean;
+}) {
+  const { t, lang } = useI18n();
+  const demos = demosOfKind(kind);
+  const entries = demos.map((d) => manifest?.items[d.id]).filter((m): m is NonNullable<typeof m> => Boolean(m));
+  const dateKey: TKey = kind === "pdf" ? "demoDatesPdf" : "demoDates";
+  const dates = (m: { newsFrom: string | null; newsTo: string | null; generatedAt: string }) =>
+    t(dateKey, { news: formatRange(m.newsFrom, m.newsTo), date: localDate(m.generatedAt) });
+
+  return (
+    <div className="mt-3 border-t border-border pt-3">
+      <div className="text-xs text-ink-3">{t("demos")}</div>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {demos.map((d) => {
+          const m = manifest?.items[d.id];
+          return (
+            <Chip key={d.id} active={activeDemo === d.id} onClick={() => onDemo(d.id)} disabled={disabled || !m}>
+              <span title={m ? dates(m) : undefined}>{d.label[lang]}</span>
+            </Chip>
+          );
+        })}
+      </div>
+      {entries.length > 0 && (
+        <p className="mt-1.5 text-[11px] text-ink-3 tabular">
+          {dates({
+            newsFrom: entries.map((m) => m.newsFrom).filter(Boolean).sort()[0] ?? null,
+            newsTo: entries.map((m) => m.newsTo).filter(Boolean).sort().at(-1) ?? null,
+            generatedAt: entries.map((m) => m.generatedAt).sort().at(-1)!,
+          })}
+        </p>
+      )}
+      <p className="mt-1 text-[11px] text-ink-3">{t(kind === "pdf" ? "demosHintPdf" : kind === "search" ? "demosHintSearch" : "demosHint")}</p>
     </div>
   );
 }
@@ -130,6 +169,9 @@ function SearchTab({ selected, setSelected, disabled }: Pick<Props, "selected" |
   const toggle = (n: NewsItem) =>
     setSelected(selected.some((s) => s.uuid === n.uuid) ? selected.filter((s) => s.uuid !== n.uuid) : [...selected, n].slice(0, 5));
 
+  // Before any search (e.g. after opening a demo), show what is selected.
+  const list = items ?? (selected.length ? selected : null);
+
   return (
     <div>
       <form onSubmit={run} className="flex gap-2">
@@ -154,9 +196,9 @@ function SearchTab({ selected, setSelected, disabled }: Pick<Props, "selected" |
       </p>
       {error && <p className="mt-2 text-xs text-bear">{error}</p>}
       {items && items.length === 0 && <p className="mt-3 text-sm text-ink-3">{t("noResults")}</p>}
-      {items && items.length > 0 && (
+      {list && list.length > 0 && (
         <ul className="mt-2 max-h-72 space-y-1 overflow-y-auto pr-1">
-          {items.map((n) => {
+          {list.map((n) => {
             const on = selected.some((s) => s.uuid === n.uuid);
             return (
               <li key={n.uuid}>
@@ -186,7 +228,7 @@ function SearchTab({ selected, setSelected, disabled }: Pick<Props, "selected" |
   );
 }
 
-function PdfTab({ pdf, disabled }: { pdf: Props["pdf"]; disabled: boolean }) {
+function PdfTab({ pdf, pdfDemo, disabled }: { pdf: Props["pdf"]; pdfDemo: Props["pdfDemo"]; disabled: boolean }) {
   const { t } = useI18n();
   const fileRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
@@ -229,6 +271,27 @@ function PdfTab({ pdf, disabled }: { pdf: Props["pdf"]; disabled: boolean }) {
 
   return (
     <div>
+      {pdfDemo && phase.kind !== "parsing" && (
+        <div className="mb-3 rounded-lg border border-accent/30 bg-accent-soft p-3">
+          <div className="flex items-start gap-2">
+            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-ink">{pdfDemo.docTitle}</div>
+              <div className="text-xs text-ink-3 tabular">
+                {t("pdfDemoMeta", { publisher: pdfDemo.publisher, date: pdfDemo.docDate, n: pdfDemo.pageCount })}
+              </div>
+              <a
+                href={pdfDemo.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-flex items-center gap-1 text-xs text-accent underline underline-offset-2"
+              >
+                {t("pdfDemoSource")} <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
       <button
         type="button"
         disabled={disabled || phase.kind === "parsing"}
@@ -244,7 +307,8 @@ function PdfTab({ pdf, disabled }: { pdf: Props["pdf"]; disabled: boolean }) {
           onFiles(e.dataTransfer.files);
         }}
         className={cx(
-          "flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-8 text-center transition-colors",
+          "flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 text-center transition-colors",
+          pdfDemo ? "py-4" : "py-8",
           drag ? "border-accent bg-accent-soft" : "border-border-strong bg-surface hover:bg-surface-2",
         )}
       >

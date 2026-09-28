@@ -14,6 +14,7 @@ import { DEFAULT_SETTINGS, SettingsPanel, type Settings } from "@/components/Set
 import { Card, SectionHeading } from "@/components/ui";
 import { ApiError, accessCode, embed, fetchCapabilities, streamAnalyze } from "@/lib/client/api";
 import { formatRange, loadDemo } from "@/lib/client/demos";
+import { headlineLine, type DemoFile, type DemoKind } from "@/config/demos";
 import { toMarkdown } from "@/lib/client/export";
 import { deleteRun, loadHistory, saveRun } from "@/lib/client/history";
 import { selectForAnalysis } from "@/lib/client/retriever";
@@ -31,7 +32,8 @@ export default function Workbench() {
 
   const [tab, setTab] = useState<InputTab>("text");
   const [text, setText] = useState("");
-  const [demo, setDemo] = useState<{ id: string; inputText: string } | null>(null);
+  // The demo on screen and a signature of its input; editing that input turns it into a custom run.
+  const [demo, setDemo] = useState<{ id: string; kind: DemoKind; signature: string; pdf: DemoFile["pdf"] | null } | null>(null);
   const [selected, setSelected] = useState<NewsItem[]>([]);
   const pdf = usePdf(Boolean(caps?.embeddings));
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -57,16 +59,29 @@ export default function Workbench() {
   }, []);
 
   const running = run?.status === "running";
-  // A demo stays a demo until its text is edited; only custom input calls the API.
-  const demoActive = tab === "text" && demo !== null && text === demo.inputText;
+  // A demo stays a demo until its input changes; only custom input calls the API.
+  const signature = (kind: DemoKind) =>
+    kind === "text" ? text : kind === "search" ? selected.map((s) => s.uuid).join("|") : pdf.doc ? `upload:${pdf.doc.fileName}` : "none";
+  const demoActive = demo !== null && tab === demo.kind && signature(demo.kind) === demo.signature;
 
   async function openDemo(id: string) {
     setError(null);
     try {
       const d = await loadDemo(id, lang);
       const s = d.settings;
-      setText(d.inputText);
-      setDemo({ id, inputText: d.inputText });
+      const kind = d.kind ?? "text";
+      if (kind === "text") {
+        setText(d.inputText);
+        setDemo({ id, kind, signature: d.inputText, pdf: null });
+      } else if (kind === "search") {
+        const headlines = d.headlines ?? [];
+        setSelected(headlines);
+        setDemo({ id, kind, signature: headlines.map((h) => h.uuid).join("|"), pdf: null });
+      } else {
+        pdf.clear();
+        setDemo({ id, kind, signature: "none", pdf: d.pdf ?? null });
+      }
+      setTab(kind);
       setSettings((prev) => ({
         ...prev,
         ...(s.mode === "single"
@@ -123,7 +138,7 @@ export default function Workbench() {
         const { chunks, retrieval } = await selectForAnalysis(index, index.hasVectors ? embed : undefined);
         input = { kind: "pdf", fileName: pdf.doc.fileName, pageCount: pdf.doc.pageCount, retrieval, chunks };
       } else if (tab === "search") {
-        input = { kind: "text", text: selected.map((n) => `${n.title} (${n.publisher}, ${n.publishedAt?.slice(0, 10) ?? ""})`).join("\n") };
+        input = { kind: "text", text: selected.map(headlineLine).join("\n") };
       } else {
         input = { kind: "text", text: text.trim() };
       }
@@ -241,6 +256,7 @@ export default function Workbench() {
               disabled={running}
               activeDemo={demoActive ? demo!.id : null}
               onDemo={openDemo}
+              pdfDemo={demoActive && demo!.kind === "pdf" ? demo!.pdf : null}
             />
           </Card>
           <Card className="p-4">
@@ -287,7 +303,7 @@ export default function Workbench() {
                 </button>
               )}
             </div>
-            {demoActive && !running && (
+            {demoActive && demo!.kind !== "pdf" && !running && (
               <button
                 type="button"
                 onClick={start}
@@ -323,11 +339,21 @@ export default function Workbench() {
               </div>
               {run.demo && (
                 <p className="rounded-lg border border-accent/25 bg-accent-soft px-4 py-2.5 text-[13px] leading-relaxed text-ink-2">
-                  {t("demoBanner", {
+                  {t(run.demo.source ? "demoBannerPdf" : "demoBanner", {
                     news: formatRange(run.demo.newsFrom, run.demo.newsTo),
                     date: new Date(run.demo.generatedAt).toLocaleDateString(lang === "zh" ? "zh-CN" : "en-US"),
                     provider: run.demo.provider === "deepseek" ? "DeepSeek" : "Gemini",
+                    title: run.demo.source?.title ?? "",
+                    publisher: run.demo.source?.publisher ?? "",
                   })}
+                  {run.demo.source && (
+                    <>
+                      {" "}
+                      <a href={run.demo.source.url} target="_blank" rel="noopener noreferrer" className="text-accent underline underline-offset-2">
+                        {t("demoSourceLink")}
+                      </a>
+                    </>
+                  )}
                 </p>
               )}
               {run.error && (

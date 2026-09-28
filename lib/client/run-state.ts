@@ -38,7 +38,16 @@ export interface RunState {
   meta?: RunMeta;
   error?: string;
   /** Set when the run is a built-in demo loaded from public/demos (no API calls). */
-  demo?: { id: string; lang: "en" | "zh"; generatedAt: string; provider: string; newsFrom: string | null; newsTo: string | null };
+  demo?: {
+    id: string;
+    lang: "en" | "zh";
+    generatedAt: string;
+    provider: string;
+    newsFrom: string | null;
+    newsTo: string | null;
+    /** PDF demos: the public document the result was generated from. */
+    source?: { title: string; publisher: string; url: string };
+  };
 }
 
 export function newRun(title: string, inputKind: RunState["inputKind"], mode: RunState["mode"]): RunState {

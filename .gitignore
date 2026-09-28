@@ -49,3 +49,6 @@ next-env.d.ts
 
 # personal notes, kept local
 /docs/v1-v2-对照说明.md
+
+# downloaded source documents for demos (not redistributed)
+/scripts/.cache/

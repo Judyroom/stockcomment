@@ -19,7 +19,8 @@ import type { AnalyzeRequest } from "@/lib/schemas";
 import type { Provider, StreamEvent } from "@/lib/types";
 
 // Inputs are the built-in demo cases (real headlines captured by `npm run demos`).
-const SAMPLES = DEMOS.map((d) => ({
+// PDF demos are skipped: their input is a document, not text.
+const SAMPLES = DEMOS.filter((d) => d.kind !== "pdf").map((d) => ({
   id: d.id,
   primaryTicker: d.primaryTicker,
   text: (JSON.parse(readFileSync(`public/demos/${d.id}.en.json`, "utf8")) as DemoFile).inputText,

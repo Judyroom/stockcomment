@@ -32,7 +32,17 @@ export async function loadDemo(id: string, lang: Lang): Promise<LoadedDemo> {
     return {
       ...file,
       // Record the requested language, not the file's, so a fallback file does not trigger reloads.
-      run: { ...run, demo: { id: file.id, lang, generatedAt: file.generatedAt, provider: file.provider, ...newsDateRange(file.inputText) } },
+      run: {
+        ...run,
+        demo: {
+          id: file.id,
+          lang,
+          generatedAt: file.generatedAt,
+          provider: file.provider,
+          ...newsDateRange(file.inputText),
+          source: file.pdf ? { title: file.pdf.docTitle, publisher: file.pdf.publisher, url: file.pdf.sourceUrl } : undefined,
+        },
+      },
     };
   }
   throw new Error(`Demo "${id}" has not been generated yet. Run npm run demos.`);

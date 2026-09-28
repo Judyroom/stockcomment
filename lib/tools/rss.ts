@@ -17,9 +17,14 @@ export async function yahooSymbolNews(symbol: string, count = 10): Promise<FeedI
   return (await fetchFeed(url)).slice(0, count);
 }
 
-export async function googleNews(query: string, count = 10, days = 7): Promise<FeedItem[]> {
+const GOOGLE_LOCALE = {
+  en: "hl=en-US&gl=US&ceid=US:en",
+  zh: "hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
+};
+
+export async function googleNews(query: string, count = 10, days = 7, locale: "en" | "zh" = "en"): Promise<FeedItem[]> {
   const q = encodeURIComponent(`${query} when:${days}d`);
-  const items = await fetchFeed(`https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`);
+  const items = await fetchFeed(`https://news.google.com/rss/search?q=${q}&${GOOGLE_LOCALE[locale]}`);
   // Google appends " - Publisher" to titles and its description is only a link back to itself.
   return items.slice(0, count).map((it) => {
     const cut = it.publisher ? it.title.lastIndexOf(` - ${it.publisher}`) : -1;
